@@ -1,0 +1,163 @@
+---
+title: "IS607 - Project 1 - Chess Tournament"
+author: "Rob Hodde"
+date: "February 28, 2016"
+output: html_document
+---
+
+```
+In this project, you're given a text file with chess tournament results where the information
+has some structure. Your job is to create an R Markdown file that generates a .CSV file 
+(that could for example be imported into a SQL database) with the following information 
+for all of the players:
+
+Player's Name, Player's State, Total Number of Points, Player's Pre-Rating,
+and Average Pre Chess Rating of Opponents
+
+For the first player, the information would be: Gary Hua, ON, 6.0, 1794, 1605
+1605 was calculated by using the pre-tournament opponents' ratings 
+of 1436, 1563, 1600, 1610, 1649, 1663, 1716, and
+dividing by the total number of games played.
+
+```   
+
+---------
+
+__First thing is to download the raw data from github.__   
+  
+```{r}
+fileName <- "https://raw.githubusercontent.com/LovinSpoonful/IS607-Project1/219c0bf7b88b9021b7bb633c253873a0a13266c0/tournamentinfo.txt"
+#fileName <- "C:/Users/Rob/Desktop/CUNY/IS607/tournamentinfo.txt" # for testing
+conn <- file(fileName,open="r")
+tourn <- readLines(conn)
+
+```
+
+__Then get rid of all the separator rows with no data.__
+
+```{r}
+
+# Search for a dash repeated any number of times, then we get to the end of the line
+i <- grep('^[-]{2,}$', tourn)  # begins with a dash, ends with a dash
+
+# Now that we know which rows contain only dashes, we know which rows to remove
+tourn <- tourn[-i]
+class(tourn)
+
+```
+
+
+__Combine each set of two rows for each player into one.__
+
+```{r}
+a <- c("") 
+for (i in seq(1, length(tourn)-1, by = 2)){
+   a <- c(a,paste(tourn[i],tourn[i+1],sep = "", collapse = NULL))
+}
+#a
+```
+
+__Reformat the character vector to comma separated values.__
+
+```{r}
+
+a <- gsub("\\|W ","\\|",a)  #remove win,draw,loss info from opponent number field
+a <- gsub("\\|D ","\\|",a)
+a <- gsub("\\|L ","\\|",a)
+a <- gsub("\\|",",",a)      #replace pipes and slashes with commas
+a <- gsub("/",",",a)
+
+```
+
+__Change the vector to a dataframe with separate columns.__
+
+```{r}
+
+df <- as.data.frame(do.call(rbind, strsplit(a, ",")), stringsAsFactors=FALSE)
+n <- df[1,]     # the first row of the data frame contains column names
+n <- unlist(n)  # change to a vector (factor)
+names(df) <- n  # change the dataframe column names to the vector names
+df = df[-1,]    # delete the first row, since this info is now in the column names
+
+# now hardcode invalid names to something meaningful ** learn how to avoid this
+colnames(df)[4:10] <- c("Opp1","Opp2","Opp3","Opp4","Opp5","Opp6","Opp7")
+df$Opp1 <- as.numeric(as.character(df$Opp1))  # ** learn how to transform a range of columns
+df$Opp2 <- as.numeric(as.character(df$Opp2))
+df$Opp3 <- as.numeric(as.character(df$Opp3))
+df$Opp4 <- as.numeric(as.character(df$Opp4))
+df$Opp5 <- as.numeric(as.character(df$Opp5))
+df$Opp6 <- as.numeric(as.character(df$Opp6))
+df$Opp7 <- as.numeric(as.character(df$Opp7))
+colnames(df)[11] <- c("State")
+df[12] <- list(NULL) # remove unneeded column
+colnames(df)[12] <- c("PreRating")
+df[13:ncol(df)] <- list(NULL) # eliminate remaining unnecessary columns
+df$PreRating <- substring(df$PreRating,5,8) #parse the initial rating
+df$PreRating <- as.numeric(as.character(df$PreRating)) # convert rating to number
+df$Total <- as.numeric(as.character(df$Total)) # convert total score to number
+
+# remove trailing and leading spaces
+library(stringr)
+df[,2] <- str_trim(as.vector(df[,2]), side = c("both"))  #from names
+df[,11] <- str_trim(as.vector(df[,11]), side = c("both"))  #from States
+
+df[is.na(df)] <- 0  # change NA values to zero so we can calculate sums
+#df[,c(1,2,12)] # for testing
+head(df)
+
+```
+
+__Now we will establish the pre-game average rating of each player's opponents__
+
+```{r}
+
+num <- numeric(0)
+denom <- numeric(0)
+avg <- numeric(0)
+PreRatingAvg <- vector()
+
+#use the Opponent pre-tournament values to build up an average
+for (i in 1:length(df$PreRating))
+  {
+    #get total of pre-game ratings for each opponent
+    players <- as.numeric(as.vector(df[i,4:10]))
+    num <- sum(df[players,"PreRating"]) #add up total ratings of each opponent
+    denom <-  sum(df[i,c(4:10)]!=0)  #count how many opponents there were
+    avg <- round(num / (denom + .000001), digits = 0)  #calculate average rating of all opponents.    
+    PreRatingAvg <- append(PreRatingAvg,avg)
+    #print(paste(num, "  /  ", denom, "  = ", avg)) # for testing
+  }
+
+df$PreRatingAvg <- PreRatingAvg
+
+```
+
+__Now we will create a comma separated text file in the working directory,__
+__including Player's Name, Player's State, Total Number of Points,__ 
+__Player's Pre-Rating, and Average Pre Chess Rating of Opponents.__
+
+```{r}
+
+dfOut <- df[,c(2,11,3,12,13)]
+head(dfOut)
+write.csv(dfOut, file="Tournament_Summary.txt")
+getwd()
+
+```
+
+---------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
